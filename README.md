@@ -107,6 +107,7 @@ for text in transcriber.stream():
 ## Roadmap
 
 - [x] Realtime audio chunk-based processing for streaming transcription
+- [ ] TensorRT optimization for faster inference
 - [ ] VAD-based chunking improvements
 - [ ] Multi-language realtime support
 
