@@ -72,6 +72,19 @@ sudo apt-get install -y portaudio19-dev python3-pyaudio
 pip install pyaudio
 ```
 
+#### Model Selection (Memory Considerations)
+
+Orin Nano (8GB) memory limits:
+
+| Model | Memory | Realtime |
+|-------|--------|----------|
+| `tiny` / `tiny.en` | ~1GB | ✅ Recommended |
+| `base` / `base.en` | ~1.5GB | ✅ Works |
+| `small` / `small.en` | ~2.5GB | ⚠️ May OOM |
+| `medium` / `large` | 5GB+ | ❌ Won't fit |
+
+For better accuracy within memory limits, use `base.en` (English-only, optimized).
+
 #### CLI Usage
 
 ```bash
@@ -81,8 +94,11 @@ python -m whisperx.realtime --list-devices
 # Start realtime transcription (auto-detects ReSpeaker or default mic)
 python -m whisperx.realtime --model tiny --compute-type int8
 
+# Use base.en for better accuracy (still fits in 8GB)
+python -m whisperx.realtime --model base.en --compute-type int8
+
 # Specify microphone by device index
-python -m whisperx.realtime --model tiny --compute-type int8 --mic-device 7
+python -m whisperx.realtime --model tiny --compute-type int8 --mic-device 0
 
 # Output as JSON (for piping to LLM)
 python -m whisperx.realtime --json | your_llm_script.py
