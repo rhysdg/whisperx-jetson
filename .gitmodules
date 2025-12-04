@@ -1,3 +1,0 @@
-[submodule "whisperx-jetson"]
-	path = whisperx-jetson
-	url = https://github.com/rhysdg/whisperx-jetson.git
