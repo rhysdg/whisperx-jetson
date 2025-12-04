@@ -54,6 +54,7 @@ class RealtimeTranscriber:
         silence_threshold: float = 0.01,
         silence_duration: float = 0.8,
         channels: int = 1,
+        batch_size: int = 1,
         on_transcript: Optional[Callable[[str], None]] = None,
     ):
         self.model_name = model_name
@@ -65,6 +66,7 @@ class RealtimeTranscriber:
         self.silence_threshold = silence_threshold
         self.silence_duration = silence_duration
         self.channels = channels
+        self.batch_size = batch_size
         self.on_transcript = on_transcript
         
         self.chunk_size = int(sample_rate * chunk_duration)
@@ -211,7 +213,7 @@ class RealtimeTranscriber:
                             # Transcribe
                             result = self._model.transcribe(
                                 audio,
-                                batch_size=1,
+                                batch_size=self.batch_size,
                                 language="en"  # Set to None for auto-detect
                             )
                             
@@ -283,6 +285,12 @@ def main():
         help="RMS threshold for silence detection"
     )
     parser.add_argument(
+        "--batch-size", "-b",
+        type=int,
+        default=1,
+        help="Batch size for transcription (reduce for OOM errors)"
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Output as JSON (for piping to LLM)"
@@ -296,6 +304,7 @@ def main():
         compute_type=args.compute_type,
         device_index=args.mic_device,
         silence_threshold=args.silence_threshold,
+        batch_size=args.batch_size,
     )
     
     if args.list_devices:
