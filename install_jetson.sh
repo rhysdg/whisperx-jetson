@@ -80,22 +80,35 @@ fi
 echo "ONNX Runtime version: $INSTALLED_VERSION ✓"
 python3 -c "import onnxruntime; print(f'Providers: {onnxruntime.get_available_providers()}')"
 
-# Step 4: Install WhisperX in editable mode (skips conflicting deps on aarch64)
+# Step 4: Install PyTorch from Jetson AI Lab (with cuDNN 9 support)
 echo ""
-echo "=== Step 4: Installing WhisperX ==="
+echo "=== Step 4: Installing PyTorch for JetPack 6 ==="
+pip uninstall -y torch torchvision torchaudio 2>/dev/null || true
+pip install --no-cache-dir torch torchaudio --index-url https://pypi.jetson-ai-lab.io/jp6/cu126
+
+# Verify PyTorch CUDA
+if python3 -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
+    echo "PyTorch CUDA: OK"
+else
+    echo "WARNING: PyTorch CUDA not available"
+fi
+
+# Step 5: Install WhisperX in editable mode (skips conflicting deps on aarch64)
+echo ""
+echo "=== Step 5: Installing WhisperX ==="
 cd "$SCRIPT_DIR"
 pip install --no-build-isolation --no-deps -e .
 
 # Install remaining dependencies (excluding onnxruntime and numpy)
 # Install faster-whisper with --no-deps to prevent it from pulling onnxruntime
 echo ""
-echo "=== Step 5: Installing remaining dependencies ==="
+echo "=== Step 6: Installing remaining dependencies ==="
 pip install --no-deps faster-whisper
 pip install ctranslate2 nltk pandas av pyannote-audio transformers huggingface-hub tokenizers
 
-# Step 6: Verify onnxruntime wasn't overwritten
+# Step 7: Verify onnxruntime wasn't overwritten
 echo ""
-echo "=== Step 6: Verifying ONNX Runtime wasn't overwritten ==="
+echo "=== Step 7: Verifying ONNX Runtime wasn't overwritten ==="
 FINAL_VERSION=$(python3 -c "import onnxruntime; print(onnxruntime.__version__)")
 if [[ "$FINAL_VERSION" != "1.18.0" && "$FINAL_VERSION" != "1.19.0" ]]; then
     echo "WARNING: onnxruntime was overwritten! Got $FINAL_VERSION instead of 1.18.0"
@@ -108,10 +121,11 @@ if [[ "$FINAL_VERSION" != "1.18.0" && "$FINAL_VERSION" != "1.19.0" ]]; then
     rm -f "$WHEEL_NAME"
 fi
 
-# Step 7: Final verification
+# Step 8: Final verification
 echo ""
 echo "=== Final Verification ==="
 python3 -c "import whisperx; print('WhisperX imported successfully!')"
+python3 -c "import torch; print(f'PyTorch: {torch.__version__}, CUDA: {torch.cuda.is_available()}')"
 python3 -c "import numpy; print(f'NumPy: {numpy.__version__}')"
 python3 -c "import onnxruntime; print(f'ONNX Runtime: {onnxruntime.__version__}')"
 python3 -c "import onnxruntime; print(f'Providers: {onnxruntime.get_available_providers()}')"
