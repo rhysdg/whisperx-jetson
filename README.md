@@ -9,7 +9,7 @@ WhisperJet provides fast automatic speech recognition on Jetson devices with **d
 | **CTranslate2** | [WhisperX](https://github.com/m-bain/whisperX) | int8 | Word-level timestamps, speaker diarization |
 | **TensorRT-LLM** | NVIDIA TRT-LLM 0.12 | int8 | Fastest inference, lowest latency |
 
-> **Credits:** This project builds on the excellent work of [Max Bain's WhisperX](https://github.com/m-bain/whisperX) and NVIDIA's TensorRT-LLM Whisper examples - all adapted to Jetson specific dependencies and constraints.
+> **Credits:** This project builds on the excellent work of [Max Bain's WhisperX](https://github.com/m-bain/whisperX) and NVIDIA's TensorRT-LLM Whisper examples - all adapted to realtime recognition and transcription, and all adapted to Jetson specific dependencies and constraints.
 
 ## Tested On
 
