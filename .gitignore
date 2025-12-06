@@ -182,3 +182,14 @@ cython_debug/
 *.flac
 *.m4a
 *.ogg
+# Whisper TRT-LLM artifacts
+whisper_trtllm/assets/
+whisper_trtllm/**/*.engine
+whisper_trtllm/**/*.pt
+whisper_trtllm/**/*.bin
+whisper_trtllm/**/*.pth
+whisper_trtllm/model.cache
+whisper_trtllm/tmp/
+whisper_trtllm/whisper_*_int8/
+whisper_trtllm/whisper_*_weights_int8/
+!whisper_trtllm/test.wav
