@@ -1,12 +1,25 @@
 #!/bin/bash
-# Full installation script for WhisperX on Jetson JetPack 6
-# Handles onnxruntime and numpy compatibility automatically
+# WhisperJet CTranslate2 Backend Installation for Jetson JetPack 6
+# 
+# This script installs the CTranslate2/WhisperX backend dependencies.
+# Run AFTER setup_tensorrt_llm.sh and setup_venv.sh which handle:
+#   - PyTorch (from Jetson AI Lab)
+#   - numpy<2
+#   - TensorRT-LLM
+#
+# Installation order:
+#   1. setup_tensorrt_llm.sh  - Build TensorRT-LLM + install torch
+#   2. setup_venv.sh          - Create virtualenv with CUDA symlinks
+#   3. install_jetson.sh      - Install CTranslate2 backend (this script)
+#   4. build_ctranslate2_cuda.sh - (Optional) Build CTranslate2 with CUDA
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "=== WhisperX Jetson Installation ==="
+echo "=========================================="
+echo "WhisperJet CTranslate2 Backend Installation"
+echo "=========================================="
 echo ""
 
 # Check if we're on aarch64 (Jetson)
@@ -28,9 +41,31 @@ if [ "$PYTHON_VERSION" != "3.10" ]; then
     echo "Warning: This script is optimized for Python 3.10, you have $PYTHON_VERSION"
 fi
 
-# Step 1: Thoroughly remove ALL existing onnxruntime installations
+# Check prerequisites from setup_tensorrt_llm.sh / setup_venv.sh
 echo ""
-echo "=== Step 1: Removing ALL existing ONNX Runtime installations ==="
+echo "[1/5] Checking prerequisites..."
+
+# Check PyTorch
+if ! python3 -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
+    echo "ERROR: PyTorch with CUDA not found!"
+    echo "Please run setup_tensorrt_llm.sh first to install PyTorch."
+    exit 1
+fi
+TORCH_VERSION=$(python3 -c "import torch; print(torch.__version__)")
+echo "  PyTorch: $TORCH_VERSION (CUDA OK)"
+
+# Check numpy
+if ! python3 -c "import numpy" 2>/dev/null; then
+    echo "ERROR: numpy not found!"
+    echo "Please run setup_venv.sh first."
+    exit 1
+fi
+NUMPY_VERSION=$(python3 -c "import numpy; print(numpy.__version__)")
+echo "  NumPy: $NUMPY_VERSION"
+
+# Step 2: Clean up any existing onnxruntime installations
+echo ""
+echo "[2/5] Cleaning existing ONNX Runtime installations..."
 pip uninstall -y onnxruntime 2>/dev/null || true
 pip uninstall -y onnxruntime-gpu 2>/dev/null || true
 pip uninstall -y onnxruntime-silicon 2>/dev/null || true
@@ -40,104 +75,90 @@ pip uninstall -y ort-nightly-gpu 2>/dev/null || true
 
 # Force remove any remaining onnxruntime files from site-packages
 SITE_PACKAGES=$(python3 -c "import site; print(site.getsitepackages()[0])")
-echo "Cleaning up any remaining onnxruntime files in $SITE_PACKAGES..."
 rm -rf "$SITE_PACKAGES/onnxruntime"* 2>/dev/null || true
-
-# Verify removal
-if python3 -c "import onnxruntime" 2>/dev/null; then
-    echo "ERROR: onnxruntime is still installed! Please manually remove it."
-    python3 -c "import onnxruntime; print(f'Found version: {onnxruntime.__version__}')"
-    exit 1
-else
-    echo "ONNX Runtime successfully removed."
-fi
-
-# Step 2: Install numpy<2 (required for Jetson onnxruntime)
-echo ""
-echo "=== Step 2: Installing NumPy <2.0 ==="
-pip install "numpy>=1.24.0,<2.0.0"
+echo "  Cleaned."
 
 # Step 3: Install Jetson ONNX Runtime GPU
 echo ""
-echo "=== Step 3: Installing ONNX Runtime GPU 1.19.0 for Jetson ==="
+echo "[3/5] Installing ONNX Runtime GPU 1.19.0 for Jetson..."
 WHEEL_URL="https://nvidia.box.com/shared/static/48dtuob7meiw6ebgfsfqakc9vse62sg4.whl"
 WHEEL_NAME="onnxruntime_gpu-1.19.0-cp310-cp310-linux_aarch64.whl"
 
-# Download and install
-wget -O "$WHEEL_NAME" "$WHEEL_URL"
-pip install --no-deps "$WHEEL_NAME"
+wget -q -O "$WHEEL_NAME" "$WHEEL_URL"
+pip install --quiet --no-deps "$WHEEL_NAME"
 rm -f "$WHEEL_NAME"
 
-# Verify onnxruntime version is correct
-echo ""
-echo "Verifying ONNX Runtime installation..."
+# Verify onnxruntime version
 INSTALLED_VERSION=$(python3 -c "import onnxruntime; print(onnxruntime.__version__)")
 # Accept 1.18.0 or 1.19.0 (NVIDIA wheel reports 1.18.0 despite filename)
 if [[ "$INSTALLED_VERSION" != "1.18.0" && "$INSTALLED_VERSION" != "1.19.0" ]]; then
     echo "ERROR: Expected onnxruntime 1.18.0 or 1.19.0 but got $INSTALLED_VERSION"
     exit 1
 fi
-echo "ONNX Runtime version: $INSTALLED_VERSION ✓"
-python3 -c "import onnxruntime; print(f'Providers: {onnxruntime.get_available_providers()}')"
+echo "  ONNX Runtime: $INSTALLED_VERSION"
 
-# Step 4: Install PyTorch from Jetson AI Lab (with cuDNN 9 support)
+# Step 4: Install WhisperJet in editable mode
 echo ""
-echo "=== Step 4: Installing PyTorch for JetPack 6 ==="
-pip uninstall -y torch torchvision torchaudio 2>/dev/null || true
-pip install --no-cache-dir torch torchaudio --index-url https://pypi.jetson-ai-lab.io/jp6/cu126
-
-# Verify PyTorch CUDA
-if python3 -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
-    echo "PyTorch CUDA: OK"
-else
-    echo "WARNING: PyTorch CUDA not available"
-fi
-
-# Step 5: Install WhisperX in editable mode (skips conflicting deps on aarch64)
-echo ""
-echo "=== Step 5: Installing WhisperX ==="
+echo "[4/5] Installing WhisperJet and dependencies..."
 cd "$SCRIPT_DIR"
-pip install --no-build-isolation --no-deps -e .
 
-# Install remaining dependencies (excluding onnxruntime and numpy)
+# Install whisperjet without deps (we manage them ourselves)
+pip install --quiet --no-build-isolation --no-deps -e .
+
 # Install faster-whisper with --no-deps to prevent it from pulling onnxruntime
-echo ""
-echo "=== Step 6: Installing remaining dependencies ==="
-pip install --no-deps faster-whisper
-pip install ctranslate2 nltk pandas av pyannote-audio transformers huggingface-hub tokenizers
+pip install --quiet --no-deps faster-whisper
 
-# Step 7: Verify onnxruntime wasn't overwritten
+# Install remaining CTranslate2 backend dependencies
+pip install --quiet ctranslate2 nltk pandas av pyannote-audio transformers huggingface-hub tokenizers
+
+# Step 5: Verify onnxruntime wasn't overwritten by a dependency
 echo ""
-echo "=== Step 7: Verifying ONNX Runtime wasn't overwritten ==="
+echo "[5/5] Verifying installation..."
 FINAL_VERSION=$(python3 -c "import onnxruntime; print(onnxruntime.__version__)")
 if [[ "$FINAL_VERSION" != "1.18.0" && "$FINAL_VERSION" != "1.19.0" ]]; then
-    echo "WARNING: onnxruntime was overwritten! Got $FINAL_VERSION instead of 1.18.0"
+    echo "WARNING: onnxruntime was overwritten! Got $FINAL_VERSION"
     echo "Reinstalling Jetson ONNX Runtime..."
     pip uninstall -y onnxruntime onnxruntime-gpu 2>/dev/null || true
-    SITE_PACKAGES=$(python3 -c "import site; print(site.getsitepackages()[0])")
     rm -rf "$SITE_PACKAGES/onnxruntime"* 2>/dev/null || true
-    wget -O "$WHEEL_NAME" "$WHEEL_URL"
-    pip install --no-deps "$WHEEL_NAME"
+    wget -q -O "$WHEEL_NAME" "$WHEEL_URL"
+    pip install --quiet --no-deps "$WHEEL_NAME"
     rm -f "$WHEEL_NAME"
 fi
 
-# Step 8: Final verification
+# Final verification
 echo ""
-echo "=== Final Verification ==="
-python3 -c "import whisperx; print('WhisperX imported successfully!')"
-python3 -c "import torch; print(f'PyTorch: {torch.__version__}, CUDA: {torch.cuda.is_available()}')"
-python3 -c "import numpy; print(f'NumPy: {numpy.__version__}')"
-python3 -c "import onnxruntime; print(f'ONNX Runtime: {onnxruntime.__version__}')"
-python3 -c "import onnxruntime; print(f'Providers: {onnxruntime.get_available_providers()}')"
+python3 -c "import whisperjet; print('  WhisperJet: OK')"
+python3 -c "import torch; print(f'  PyTorch: {torch.__version__} (CUDA: {torch.cuda.is_available()})')"
+python3 -c "import numpy; print(f'  NumPy: {numpy.__version__}')"
+python3 -c "import onnxruntime; print(f'  ONNX Runtime: {onnxruntime.__version__}')"
+python3 -c "import ctranslate2; print(f'  CTranslate2: {ctranslate2.__version__}')"
 
 # Check for GPU providers
 if python3 -c "import onnxruntime; assert 'CUDAExecutionProvider' in onnxruntime.get_available_providers()" 2>/dev/null; then
-    echo "✓ CUDA provider available"
+    echo "  ONNX CUDA Provider: OK"
 else
-    echo "✗ WARNING: CUDA provider NOT available - check your installation"
+    echo "  ONNX CUDA Provider: NOT AVAILABLE (CPU fallback)"
+fi
+
+# Check CTranslate2 CUDA
+if python3 -c "import ctranslate2; assert 'cuda' in ctranslate2.get_supported_compute_types('cuda')" 2>/dev/null; then
+    echo "  CTranslate2 CUDA: OK"
+else
+    echo "  CTranslate2 CUDA: NOT AVAILABLE (run build_ctranslate2_cuda.sh to enable)"
 fi
 
 echo ""
-echo "=== Installation Complete! ==="
+echo "=========================================="
+echo "CTranslate2 Backend Installation Complete!"
+echo "=========================================="
 echo ""
-echo "Usage: whisperx audio.wav --model large-v3 --compute_type float16"
+echo "Usage:"
+echo "  # Realtime transcription"
+echo "  python -m whisperjet.realtime --model tiny --compute-type int8"
+echo ""
+echo "  # File transcription"
+echo "  whisperx audio.wav --model base.en --compute_type int8"
+echo ""
+echo "For CTranslate2 GPU acceleration, run:"
+echo "  ./build_ctranslate2_cuda.sh"
+echo ""

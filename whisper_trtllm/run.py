@@ -334,7 +334,14 @@ class WhisperTRTLLM(object):
                                            num_beams=num_beams)
         texts = []
         for i in range(len(output_ids)):
-            text = self.tokenizer.decode(output_ids[i][0]).strip()
+            # Filter out invalid token IDs (negative or out of vocab range)
+            # This can happen with malformed decoder output
+            tokens = output_ids[i][0]
+            valid_tokens = [t for t in tokens if 0 <= t < self.tokenizer.n_vocab]
+            if valid_tokens:
+                text = self.tokenizer.decode(valid_tokens).strip()
+            else:
+                text = ""
             texts.append(text)
         return texts
 
