@@ -98,35 +98,14 @@ python -m whisperx.realtime --model tiny --compute-type int8
 python -m whisperx.realtime --model base.en --compute-type int8
 
 # Specify microphone by device index
-python -m whisperx.realtime --model tiny --compute-type int8 --mic-device 0
-
-# Output as JSON (for piping to LLM)
-python -m whisperx.realtime --json | your_llm_script.py
+python -m whisperx.realtime --model tiny --device_index 2
 ```
 
-#### Python API
+## Patch Notes
 
-```python
-from whisperx.realtime import RealtimeTranscriber
-
-transcriber = RealtimeTranscriber(
-    model_name="base",
-    compute_type="int8",  # Required on Jetson
-    device_index=None,    # Auto-detects ReSpeaker, or specify index
-)
-
-# Stream transcripts
-for text in transcriber.stream():
-    print(text)  # Send to LLM, CLI, etc.
-```
-
-## Roadmap
-
-- [x] Realtime audio chunk-based processing for streaming transcription
-- [ ] TensorRT optimization for faster inference
-- [ ] VAD-based chunking improvements
-- [ ] Multi-language realtime support
-
-## Attribution
-
-Based on [WhisperX](https://github.com/m-bain/whisperX) by Max Bain et al. See [LICENSE](LICENSE) for details.
+- Ensure generated encoder/decoder configs now expose the `n_audio_*` and `n_text_*` metadata so TensorRT-LLM's `PretrainedConfig` doesn't need to guess those attributes and can build without `AttributeError`.
+- Save the `positional_embedding` tensor in addition to `position_embedding.weight` so TensorRT-LLM sees the tensor it expects when loading checkpoints.
+- Documented the small.en build workflow in `README.md` and added `build_small_en_example.sh` so you can reproduce the example steps with a dedicated script.
+- Replaced `run.py` with the current official TensorRT-LLM 0.12 Whisper example so the runtime imports and session logic match the packaged `tensorrt_llm` wheel.
+- Added CLI flags for `--max_input_len`/`--padding_strategy` so mel lengths can be padded/truncated to match the 0.12 encoder profile and avoid the static dimension mismatch error.
+- Added a `--max_new_tokens` CLI flag so Jetson users can dial down the decoder budget when `DynamicDecodeOp` hits pinned-host memory limits.
