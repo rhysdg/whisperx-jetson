@@ -1,74 +1,41 @@
 [project]
-urls = { repository = "https://github.com/m-bain/whisperx" }
-authors = [{ name = "Max Bain" }]
-name = "whisperx"
-version = "3.7.4"
-description = "Time-Accurate Automatic Speech Recognition using Whisper."
+name = "whisperjet"
+version = "1.0.0"
+description = "High-performance realtime speech recognition for NVIDIA Jetson with dual-backend support (CTranslate2 + TensorRT-LLM)"
 readme = "README.md"
-requires-python = ">=3.9, <3.14"
-license = { text = "BSD-2-Clause" }
-
-dependencies = [
-    "ctranslate2>=4.5.0",
-    "faster-whisper>=1.1.1",
-    "nltk>=3.9.1",
-    # For Jetson JetPack 6: use numpy<2 for onnxruntime compatibility
-    # onnxruntime is installed manually via install_jetson_onnxruntime.sh
-    "numpy>=1.24.0,<2.0.0; platform_machine == 'aarch64'",
-    "numpy>=2.0.2,<2.1.0; python_version <'3.13' and platform_machine != 'aarch64'",
-    "numpy>=2.1.0,<2.3.0; python_version >='3.13' and platform_machine != 'aarch64'",
-    # Skip onnxruntime on aarch64 (Jetson) - install manually with GPU support
-    "onnxruntime>=1.19,<1.20.0; python_version <'3.10' and platform_machine != 'aarch64'",
-    "pandas>=2.2.3,<2.3.0",
-    "av<16.0.0",
-    "pyannote-audio>=3.3.2,<4.0.0",
-    "torch~=2.8.0",
-    "torchaudio~=2.8.0",
-    "transformers>=4.48.0",
-    "triton>=3.3.0; sys_platform == 'linux' and platform_machine == 'x86_64'" # only install triton on x86_64 Linux
+requires-python = ">=3.10"
+license = { text = "BSD-3-Clause" }
+authors = [
+    { name = "Rhys Williams", email = "rhysdgwilliams@gmail.com" },
 ]
 
+[project.urls]
+Repository = "https://github.com/rhysdg/mr-b/tree/main/whisperx-jetson"
+Homepage = "https://github.com/rhysdg/mr-b"
+
+# Dependencies are intentionally minimal - use install scripts for full setup:
+#   1. setup_tensorrt_llm.sh - PyTorch, TensorRT-LLM
+#   2. setup_venv.sh - virtualenv with CUDA symlinks
+#   3. install_jetson.sh - CTranslate2 backend deps
+dependencies = []
+
 [project.optional-dependencies]
-# For Jetson: install with `pip install -e ".[jetson]"` after running install_jetson.sh
-jetson = [
-    "numpy>=1.24.0,<2.0.0",
-    # onnxruntime-gpu installed manually via install_jetson.sh
+dev = [
+    "pytest",
+    "black",
+    "ruff",
 ]
 
 [project.scripts]
-whisperx = "whisperx.__main__:cli"
+whisperjet = "whisperjet.__main__:cli"
 
 [build-system]
 requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["whisperx*"]
-
-[tool.uv.sources]
-torch = [
-  { index = "pytorch-cpu", marker = "sys_platform == 'darwin'" },
-  { index = "pytorch-cpu", marker = "platform_machine != 'x86_64' and sys_platform != 'darwin'" },
-  { index = "pytorch", marker = "platform_machine == 'x86_64' and sys_platform != 'darwin'" },
-]
-torchaudio = [
-  { index = "pytorch-cpu", marker = "sys_platform == 'darwin'" },
-  { index = "pytorch-cpu", marker = "platform_machine != 'x86_64' and sys_platform != 'darwin'" },
-  { index = "pytorch", marker = "platform_machine == 'x86_64' and sys_platform != 'darwin'" },
-]
-triton = [
-  { index = "pytorch", marker = "sys_platform == 'linux'" },
-]
-
-[[tool.uv.index]]
-name = "pytorch"
-url = "https://download.pytorch.org/whl/cu128"
-explicit = true
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
+include = ["whisperjet*"]
