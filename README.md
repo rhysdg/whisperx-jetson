@@ -140,11 +140,11 @@ cd whisper_trtllm
 
 ```bash
 # CTranslate2 backend
-whisperx audio.wav --compute_type int8
+python -m whisperjet.transcribe test.wav --compute_type int8
 
 # TensorRT-LLM backend  
 cd whisper_trtllm
-python3 run.py --engine_dir whisper_small.en_int8 --input_file audio.wav --name small.en
+python3 run.py --engine_dir whisper_small.en_int8 --input_file ../test.wav --name small.en
 ```
 
 ## Patch Notes
