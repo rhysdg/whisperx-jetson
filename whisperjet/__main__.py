@@ -4,9 +4,9 @@ import platform
 
 import torch
 
-from whisperx.utils import (LANGUAGES, TO_LANGUAGE_CODE, optional_float,
+from whisperjet.utils import (LANGUAGES, TO_LANGUAGE_CODE, optional_float,
                             optional_int, str2bool)
-from whisperx.log_utils import setup_logging
+from whisperjet.log_utils import setup_logging
 
 
 def cli():
@@ -93,7 +93,7 @@ def cli():
     else:
         setup_logging(level="warning")
 
-    from whisperx.transcribe import transcribe_task
+    from whisperjet.transcribe import transcribe_task
 
     transcribe_task(args, parser)
 

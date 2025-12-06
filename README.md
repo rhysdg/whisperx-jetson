@@ -1,8 +1,15 @@
-# WhisperX for Jetson
+# WhisperJet
 
-**Jetson-optimized fork of [WhisperX](https://github.com/m-bain/whisperX) by Max Bain**
+**High-performance realtime speech recognition for NVIDIA Jetson**
 
-Fast automatic speech recognition with word-level timestamps and speaker diarization on NVIDIA Jetson devices.
+WhisperJet provides fast automatic speech recognition on Jetson devices with **dual-backend support**:
+
+| Backend | Library | Quantization | Use Case |
+|---------|---------|--------------|----------|
+| **CTranslate2** | [WhisperX](https://github.com/m-bain/whisperX) | int8 | Word-level timestamps, speaker diarization |
+| **TensorRT-LLM** | NVIDIA TRT-LLM 0.12 | int8 | Fastest inference, lowest latency |
+
+> **Credits:** This project builds on the excellent work of [Max Bain's WhisperX](https://github.com/m-bain/whisperX) and NVIDIA's TensorRT-LLM Whisper examples - all adapted to Jetson specific dependencies and constraints.
 
 ## Tested On
 
@@ -10,7 +17,7 @@ Fast automatic speech recognition with word-level timestamps and speaker diariza
 |--------|---------|
 | Orin Nano Super | 6.2.0 |
 
-## Jetson Installation
+## Installation
 
 ### Requirements
 
@@ -18,61 +25,85 @@ Fast automatic speech recognition with word-level timestamps and speaker diariza
 - JetPack 6 (L4T R36.x)
 - Python 3.10
 
-### Install
+### Install WhisperJet
 
 ```bash
-git clone https://github.com/disler/whisperx-jetson.git
-cd whisperx-jetson
+git clone https://github.com/rhysdg/mr-b.git
+cd mr-b/whisperx-jetson
 chmod +x install_jetson.sh
 ./install_jetson.sh
 ```
 
-### Enable GPU Acceleration (Optional)
+### Enable CTranslate2 GPU Acceleration (Optional)
 
-The pip version of CTranslate2 doesn't include CUDA support for aarch64. To enable GPU acceleration, build from source:
+The pip version of CTranslate2 doesn't include CUDA support for aarch64. To enable GPU acceleration for the WhisperX backend, build from source:
 
 ```bash
 chmod +x build_ctranslate2_cuda.sh
 ./build_ctranslate2_cuda.sh
 ```
 
-This takes ~20-30 minutes but enables CUDA inference. Without it, WhisperX falls back to CPU.
+This takes ~20-30 minutes but enables CUDA inference. Without it, the CTranslate2 backend falls back to CPU.
 
-### Verify
+### Verify Installation
 
 ```bash
 python3 -c "import torch; print(f'PyTorch CUDA: {torch.cuda.is_available()}')"
-python3 -c "import onnxruntime; print(f'ONNX Runtime: {onnxruntime.__version__}')"
-python3 -c "import onnxruntime; print(f'Providers: {onnxruntime.get_available_providers()}')"
+python3 -c "import tensorrt_llm; print(f'TensorRT-LLM: {tensorrt_llm.__version__}')"
 ```
-
-You should see `CUDAExecutionProvider` and `TensorrtExecutionProvider` in the providers list.
 
 ### Key Dependencies
 
 PyTorch is installed from [Jetson AI Lab PyPI](https://pypi.jetson-ai-lab.io/jp6/cu126) which has wheels built for JetPack 6 with cuDNN 9 support.
 
-## Usage
-
-### File Transcription
-
-```bash
-# int8 compute type required on Jetson (float16 not supported)
-whisperx audio.wav --compute_type int8
-```
-
-### Realtime Streaming (Mic to Text)
+## Realtime Transcription
 
 Stream microphone audio to text in realtime. Primary target: **Seeed Studio ReSpeaker Mic Array** (adaptable to other mics).
 
-#### Install PyAudio (required for realtime)
+### Install PyAudio (required for realtime)
 
 ```bash
 sudo apt-get install -y portaudio19-dev python3-pyaudio
 pip install pyaudio
 ```
 
-#### Model Selection (Memory Considerations)
+### Backend Comparison
+
+| Backend | Latency | Memory | Features |
+|---------|---------|--------|----------|
+| **TensorRT-LLM** | ~100ms | ~2GB | Fastest, int8 engine |
+| **CTranslate2** | ~200ms | ~1-2.5GB | Timestamps, diarization |
+
+### CLI Usage
+
+```bash
+# List available microphones
+python -m whisperjet.realtime --list-devices
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# TensorRT-LLM Backend (Recommended for lowest latency)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+python -m whisperjet.realtime \
+    --backend tensorrt-llm \
+    --engine_dir whisper_trtllm/whisper_small.en_int8 \
+    --max_new_tokens 48
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CTranslate2 Backend (Word timestamps & diarization)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Start realtime transcription (auto-detects ReSpeaker or default mic)
+python -m whisperjet.realtime --model tiny --compute-type int8
+
+# Use base.en for better accuracy (still fits in 8GB)
+python -m whisperjet.realtime --model base.en --compute-type int8
+
+# Specify microphone by device index
+python -m whisperjet.realtime --model tiny --device_index 2
+```
+
+### Model Selection (Memory Considerations)
+
+#### CTranslate2 Backend
 
 Orin Nano (8GB) memory limits:
 
@@ -83,50 +114,43 @@ Orin Nano (8GB) memory limits:
 | `small` / `small.en` | ~2.5GB | May OOM |
 | `medium` / `large` | 5GB+ | Won't fit |
 
-For better accuracy within memory limits, use `base.en` (English-only, optimized).
+#### TensorRT-LLM Backend (int8)
 
-#### CLI Usage
+| Model | Memory | Realtime | Status |
+|-------|--------|----------|--------|
+| `tiny.en` | ~1GB | Fast | Tested |
+| `base.en` | ~1.5GB | Fast | Tested |
+| `small.en` | ~2GB | Fast | Tested |
+| `medium.en` | ~3GB | Unknown | Not tested |
+| `large-v3` | ~5GB | May OOM | Not tested |
+
+> **Note:** TensorRT-LLM int8 engines are more memory-efficient than CTranslate2, allowing `small.en` to run comfortably on 8GB Orin Nano.
+
+## Building TensorRT-LLM Engines
+
+See `whisper_trtllm/README.md` for instructions on building int8 Whisper engines.
+
+Quick start:
+```bash
+cd whisper_trtllm
+./build_small_en.sh
+```
+
+## File Transcription
 
 ```bash
-# List available microphones
-python -m whisperx.realtime --list-devices
+# CTranslate2 backend
+whisperx audio.wav --compute_type int8
 
-# Start realtime transcription (auto-detects ReSpeaker or default mic)
-python -m whisperx.realtime --model tiny --compute-type int8
-
-# Use base.en for better accuracy (still fits in 8GB)
-python -m whisperx.realtime --model base.en --compute-type int8
-
-# Specify microphone by device index
-python -m whisperx.realtime --model tiny --compute-type int8 --mic-device 0
-
-# Output as JSON (for piping to LLM)
-python -m whisperx.realtime --json | your_llm_script.py
+# TensorRT-LLM backend  
+cd whisper_trtllm
+python3 run.py --engine_dir whisper_small.en_int8 --input_file audio.wav --name small.en
 ```
 
-#### Python API
+## Patch Notes
 
-```python
-from whisperx.realtime import RealtimeTranscriber
-
-transcriber = RealtimeTranscriber(
-    model_name="base",
-    compute_type="int8",  # Required on Jetson
-    device_index=None,    # Auto-detects ReSpeaker, or specify index
-)
-
-# Stream transcripts
-for text in transcriber.stream():
-    print(text)  # Send to LLM, CLI, etc.
-```
-
-## Roadmap
-
-- [x] Realtime audio chunk-based processing for streaming transcription
-- [ ] TensorRT optimization for faster inference
-- [ ] VAD-based chunking improvements
-- [ ] Multi-language realtime support
-
-## Attribution
-
-Based on [WhisperX](https://github.com/m-bain/whisperX) by Max Bain et al. See [LICENSE](LICENSE) for details.
+- Added dual-backend support: CTranslate2 (WhisperX) and TensorRT-LLM
+- TensorRT-LLM 0.12 integration with int8 quantization
+- Realtime CLI with `--backend` flag to switch between engines
+- Fixed PyAudio threading issues on Jetson (blocking mode for ARM compatibility)
+- Added `--max_new_tokens`, `--max_input_len`, `--padding_strategy` CLI flags for TensorRT-LLM tuning
