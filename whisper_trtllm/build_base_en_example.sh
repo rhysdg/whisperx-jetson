@@ -1,6 +1,7 @@
 #!/bin/bash
-# Build script adapted from TensorRT-LLM's Whisper example README
-# This targets the small.en checkpoint and automates download + build steps.
+# Build script for base.en model optimized for CLI conversation
+# Low memory footprint: batch=1, beam=1, paged KV cache
+# MAX_INPUT_LEN=3000 is REQUIRED by Whisper architecture (30 seconds @ 100Hz mel spectrogram)
 
 set -euo pipefail
 
@@ -8,14 +9,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ASSETS_DIR="${SCRIPT_DIR}/assets"
 mkdir -p "${ASSETS_DIR}"
 
-MODEL_NAME="${MODEL_NAME:-small.en}"
+MODEL_NAME="${MODEL_NAME:-base.en}"
 INFERENCE_PRECISION="${INFERENCE_PRECISION:-float16}"
 WEIGHT_ONLY_PRECISION="${WEIGHT_ONLY_PRECISION:-int8}"
 MAX_BATCH_SIZE="${MAX_BATCH_SIZE:-1}"  # CLI: process one utterance at a time
 MAX_BEAM_WIDTH="${MAX_BEAM_WIDTH:-1}"  # CLI: greedy decoding saves memory
-MAX_INPUT_LEN="${MAX_INPUT_LEN:-1500}"  # ~15 seconds of audio per turn
+MAX_INPUT_LEN="${MAX_INPUT_LEN:-3000}"  # 30 seconds @ 100Hz (Whisper architecture requirement)
 CHECKPOINT_DIR="whisper_${MODEL_NAME}_weights_${WEIGHT_ONLY_PRECISION}"
-OUTPUT_DIR="whisper_${MODEL_NAME}_${WEIGHT_ONLY_PRECISION}"
+OUTPUT_DIR="whisper_${MODEL_NAME}"
 
 # Helper to download only once
 fetch_asset() {
@@ -32,7 +33,7 @@ fetch_asset() {
 fetch_asset https://raw.githubusercontent.com/openai/whisper/main/whisper/assets/mel_filters.npz
 fetch_asset https://raw.githubusercontent.com/openai/whisper/main/whisper/assets/gpt2.tiktoken
 fetch_asset https://raw.githubusercontent.com/yuekaizhang/Triton-ASR-Client/main/datasets/mini_en/wav/1221-135766-0002.wav
-fetch_asset https://openaipublic.azureedge.net/main/whisper/models/f953ad0fd29cacd07d5a9eda5624af0f6bcf2258be67c92b79389873d91e0872/small.en.pt
+fetch_asset https://openaipublic.azureedge.net/main/whisper/models/25a8566e1d0c1e2231d1c762132cd20e0f96a85d16145c3a00adf5d1ac670ead/base.en.pt
 
 echo "Converting ${MODEL_NAME} checkpoint into TensorRT-LLM checkpoints..."
 python3 convert_checkpoint.py \
@@ -42,6 +43,7 @@ python3 convert_checkpoint.py \
     --output_dir "${CHECKPOINT_DIR}"
 
 # Build encoder
+echo "Building encoder with max_input_len=${MAX_INPUT_LEN} (~$((MAX_INPUT_LEN / 100)) seconds)..."
 trtllm-build \
     --checkpoint_dir "${CHECKPOINT_DIR}/encoder" \
     --output_dir "${OUTPUT_DIR}/encoder" \
@@ -55,6 +57,7 @@ trtllm-build \
     --max_input_len "${MAX_INPUT_LEN}"
 
 # Build decoder
+echo "Building decoder with batch=${MAX_BATCH_SIZE}, beam=${MAX_BEAM_WIDTH}..."
 trtllm-build \
     --checkpoint_dir "${CHECKPOINT_DIR}/decoder" \
     --output_dir "${OUTPUT_DIR}/decoder" \
@@ -73,7 +76,19 @@ trtllm-build \
 
 cat <<EOF
 
-Build complete! Engines saved in ${OUTPUT_DIR}
-You can run:
-  python3 run.py --engine_dir ${OUTPUT_DIR} --input_file ${ASSETS_DIR}/1221-135766-0002.wav --name small.en
+✅ Build complete! Engines saved in ${OUTPUT_DIR}
+
+Configuration:
+  Model: ${MODEL_NAME}
+  Precision: ${WEIGHT_ONLY_PRECISION}
+  Max batch size: ${MAX_BATCH_SIZE}
+  Max beam width: ${MAX_BEAM_WIDTH}
+  Max input length: ${MAX_INPUT_LEN} frames (~$((MAX_INPUT_LEN / 100)) seconds)
+  Paged KV cache: enabled
+
+Test with:
+  python3 run.py --engine_dir ${OUTPUT_DIR} --input_file ${ASSETS_DIR}/1221-135766-0002.wav --name base.en --max_input_len ${MAX_INPUT_LEN} --padding_strategy max
+
+Use in CLI agent:
+  python3 cli_agent.py --speech --asr-backend tensorrt-llm --asr-engine-dir ${OUTPUT_DIR}
 EOF

@@ -9,15 +9,15 @@ authors = [
     { name = "Rhys Williams", email = "rhysdgwilliams@gmail.com" },
 ]
 
-[project.urls]
-Repository = "https://github.com/rhysdg/mr-b/tree/main/whisperx-jetson"
-Homepage = "https://github.com/rhysdg/mr-b"
-
 # Dependencies are intentionally minimal - use install scripts for full setup:
 #   1. setup_tensorrt_llm.sh - PyTorch, TensorRT-LLM
 #   2. setup_venv.sh - virtualenv with CUDA symlinks
 #   3. install_jetson.sh - CTranslate2 backend deps
 dependencies = []
+
+[project.urls]
+Repository = "https://github.com/rhysdg/mr-b/tree/main/whisperx-jetson"
+Homepage = "https://github.com/rhysdg/mr-b"
 
 [project.optional-dependencies]
 dev = [

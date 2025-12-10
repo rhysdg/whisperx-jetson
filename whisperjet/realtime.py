@@ -33,7 +33,7 @@ if trt_llm_path not in sys.path:
 
 class WhisperTRTLLMWrapper:
     """Wrapper for TensorRT-LLM Whisper model to match WhisperX interface."""
-    def __init__(self, engine_dir: str, assets_dir: str = None, max_new_tokens: int = 48):
+    def __init__(self, engine_dir: str, assets_dir: str = None, max_new_tokens: int = 48, max_input_len: int = 3000):
         try:
             from run import WhisperTRTLLM, align_mel_length
             from whisper_utils import log_mel_spectrogram
@@ -49,6 +49,7 @@ class WhisperTRTLLMWrapper:
         self.align_mel_length = align_mel_length
         self.str_dtype_to_torch = str_dtype_to_torch
         self.max_new_tokens = max_new_tokens
+        self.max_input_len = max_input_len
         self.n_mels = self.model.encoder.n_mels
 
     def transcribe(self, audio: np.ndarray, batch_size: int = 1, language: str = "en") -> dict:
@@ -69,9 +70,9 @@ class WhisperTRTLLMWrapper:
         if batch_size > 1:
             mel = mel.repeat(batch_size, 1, 1)
             
-        # Align length (pad/trim to 3000 frames as per TRT engine requirement)
+        # Align length (pad/trim to max_input_len frames as per TRT engine requirement)
         # Using 'max' strategy to ensure we match the engine profile
-        mel = self.align_mel_length(mel, 3000, 'max')
+        mel = self.align_mel_length(mel, self.max_input_len, 'max')
         
         # Generate
         texts = self.model.process_batch(
@@ -125,6 +126,7 @@ class RealtimeTranscriber:
         trt_engine_dir: Optional[str] = None,
         trt_assets_dir: Optional[str] = None,
         max_new_tokens: int = 48,
+        max_input_len: int = 3000,
     ):
         self.model_name = model_name
         self.device = device
@@ -141,6 +143,7 @@ class RealtimeTranscriber:
         self.trt_engine_dir = trt_engine_dir
         self.trt_assets_dir = trt_assets_dir
         self.max_new_tokens = max_new_tokens
+        self.max_input_len = max_input_len
         
         self.chunk_size = int(sample_rate * chunk_duration)
         self.silence_chunks = int(silence_duration / chunk_duration)
@@ -162,7 +165,8 @@ class RealtimeTranscriber:
                 self._model = WhisperTRTLLMWrapper(
                     self.trt_engine_dir, 
                     self.trt_assets_dir,
-                    self.max_new_tokens
+                    self.max_new_tokens,
+                    self.max_input_len
                 )
             else:
                 try:
